@@ -22,4 +22,7 @@
 git clone https://github.com/YueCobra/block-street.git
 cd block-street
 pip install -r requirements.txt
+#普通运行
 python main.py
+#配置具体邀请码 具体次数
+python block_street_test.py
