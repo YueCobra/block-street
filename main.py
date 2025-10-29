@@ -7,22 +7,25 @@ import time
 
 import httpx
 from eth_account.messages import encode_defunct
-# from lxml.parser import result
-from web3 import AsyncHTTPProvider, AsyncWeb3, Web3
+from web3 import AsyncHTTPProvider, AsyncWeb3
 from loguru import logger
-from captcha import captcha_cloudflare_turnstile, solve_recaptcha
+
+from block_street_rsa_config import get_block_street_public_keys_from_website
+from captcha import solve_recaptcha
 from fake_useragent import UserAgent
 import random
-import aiofiles
 import asyncio
 from pathlib import Path
 from typing import Union
 
-from secret import encrypt_sign_verify_payload,BlockStreetEncryptedPayload
+from ip import get_dynamic_ip_time
+from secret import new_encrypt_sign_verify_payload
+import requests
+from datetime import datetime, timezone, timedelta
+import aiofiles
 
 customer_cf_url_file = 'customer_cf_url.txt'
 customer_cf_urls = [] #可用打码地址
-
 
 def load_customer_cf_urls():
     try:
@@ -96,44 +99,11 @@ async def append_wallet_address(file_path: Union[str, Path], wallet_address: str
         print(f"写入钱包地址时出错: {e}")
         return False
 
-countries = [
-        "us",
-        "uk",
-        "jp",
-        "fr",
-        "ca",
-        "in"
-
-    ]
 def generate_random_string(length=16):
     # 定义字符集，包括字母和数字
     characters = string.ascii_letters + string.digits
     random_string = ''.join(random.choice(characters) for _ in range(length))
     return random_string
-
-async def get_dynamic_ip_time(t=5,country=None):
-    """异步获取代理 可指定国家"""
-    logger.debug(f"开始获取ip...")
-    for i in range(3):
-        rand_session = generate_random_string(16)
-        if country is None:
-            country = random.choice(countries)
-            # "http://03091493-zone-custom-sessid-PcxZ9MwM7ERwR18K-sessTime-5:uPbMOOcC@na.proxys5.net:6200"
-        # proxy = f"http://{Config.PROXY_ACCOUNT}-region-{country}-session-{rand_session}-sessTime-{t}:{Config.PROXY_PASSWORD}@{Config.PROXY_HOST}"
-        proxy = f"http://03091493-zone-custom-sessid-{rand_session}-sessTime-{t}:uPbMOOcC@na.proxys5.net:6200"
-        logger.info(f"{proxy}")
-
-        # 检查IP
-        try:
-            async with httpx.AsyncClient(timeout=15,proxy = proxy) as client:
-                response =await client.get('https://api64.ipify.org?format=json')
-                logger.success(f"获取到代理IP:{response.json()['ip']}")
-                return proxy
-        except Exception as e:
-            logger.error("获取代理IP发生错误:", e)
-            await asyncio.sleep(0.5)
-
-    return None
 def get_random_ua():
     """使用 fake-useragent 库生成随机 UA"""
     try:
@@ -142,9 +112,6 @@ def get_random_ua():
     except:
         # 备用方案
         return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
-
-# 安装：pip install fake-useragent
-
 def load_wallets():
     try:
         # 获取当前目录
@@ -208,39 +175,22 @@ def load_invite_codes():
         logger.error(f"erro: {e}")
         return None
 
-example_msg="""
-blockstreet.money wants you to sign in with your Ethereum account:
-0xDE75246436987d0cdaD15af7b573D91b6e66CA9a
 
-Welcome to Block Street
-
-URI: https://blockstreet.money
-Version: 1
-Chain ID: 1
-Nonce: 2KpAAbGrWew1et4n
-Issued At: 2025-10-10T02:06:52.383Z
-Expiration Time: 2025-10-10T02:08:52.383Z"""
-import requests
-
-from datetime import datetime, timezone, timedelta
-import aiofiles
 
 rpc_url_22 = ""
 lock = asyncio.Lock()
 invite_code_list = 'invite_code_list_new.txt'
 class BlockStreet:
-    def __init__(self, idx, pk,proxy):
+    def __init__(self, idx, pk,proxy,public_keys=None):
         self.ua = get_random_ua()
         self.idx = idx
         self.pk = pk
         self.proxy = proxy
         self.web3 = AsyncWeb3(AsyncHTTPProvider())
-        self.http = httpx.AsyncClient(timeout=25,proxy=proxy,http2=True,verify=False)
+        self.http = httpx.AsyncClient(timeout=25,proxy=proxy,verify=False,http2=True)
         self.address = self.web3.eth.account.from_key(self.pk).address
-        self.yescaptcha_type = False
-
-
-        # self.customer_captcha_url = 'http://45.195.111.3:7001/'
+        self.chain_id = 10143
+        self.public_keys = public_keys
     async def close(self):
         await self.http.aclose()
 
@@ -272,7 +222,7 @@ Welcome to Block Street
 
 URI: https://blockstreet.money
 Version: 1
-Chain ID: 1
+Chain ID: {self.chain_id}
 Nonce: {nonce}
 Issued At: {issued_at_str}
 Expiration Time: {expiration_time_str}"""
@@ -282,7 +232,7 @@ Expiration Time: {expiration_time_str}"""
             'address': self.address,
             'nonce': nonce,
             'signature': signature,
-            'chainId': 1,
+            'chainId': self.chain_id,
             'issuedAt': issued_at_str,
             'expirationTime': expiration_time_str,
             'invite_code': '',
@@ -295,20 +245,21 @@ Expiration Time: {expiration_time_str}"""
         }
 
         headers = {
+            'host': 'api.blockstreet.money',
+            'sec-ch-ua-platform': '"Windows"',
+            'user-agent': self.ua,
             'accept': 'application/json, text/plain, */*',
-            'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
-            'cache-control': 'no-cache',
-            'origin': 'https://blockstreet.money',
-            'pragma': 'no-cache',
-            'priority': 'u=1, i',
-            'referer': 'https://blockstreet.money/',
+            'fingerprint': 'cf512bce53173c6c27488c72f88e8cb6',
             'sec-ch-ua': '"Google Chrome";v="141", "Not?A_Brand";v="8", "Chromium";v="141"',
             'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
+            'origin': 'https://blockstreet.money',
             'sec-fetch-site': 'same-site',
-            'user-agent': self.ua,
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-dest': 'empty',
+            'referer': 'https://blockstreet.money/',
+            # 'accept-encoding': 'gzip, deflate, br, zstd',
+            'accept-language': 'zh-CN,zh;q=0.9',
+            'priority': 'u=1, i',
             # 'cookie': 'gfsessionid=',
         }
         params = {
@@ -373,8 +324,8 @@ Expiration Time: {expiration_time_str}"""
         }
 
         try:
-            response = await self.http.post('https://api.blockstreet.money/api/share', headers=headers)
-            logger.debug(response.json())
+            await self.http.post('https://api.blockstreet.money/api/share', headers=headers)
+            # logger.debug(response.json())
         except Exception as e:
             logger.error(e)
             pass
@@ -403,7 +354,7 @@ Expiration Time: {expiration_time_str}"""
                 logger.info('recaptchav2 token:', result.get('token'))
                 return result.get('token')
             else:
-                print('Error:', result.get('message'))
+                logger.error('Error:', result.get('message'))
                 return None
 
         except requests.exceptions.RequestException as e:
@@ -414,7 +365,9 @@ Expiration Time: {expiration_time_str}"""
             return None
     async def get_recaptcha_capsolver(self):
         # site_key = '0x4AAAAAABpfyUqunlqwRBYN'
-        re_captcha_key = '6Ld-0_ErAAAAACHvVQQLpjeEeXEKiIKvTCk-5emf'
+        # re_captcha_key = '6Ld-0_ErAAAAACHvVQQLpjeEeXEKiIKvTCk-5emf'
+        # rr="6Lf-rfgrAAAAAGNmE_Y4php5cLwsjUc_KSagV4Pw"
+        re_captcha_key = '6Lf-rfgrAAAAAGNmE_Y4php5cLwsjUc_KSagV4Pw'
         json_data = {
             "task":
                 {
@@ -429,41 +382,13 @@ Expiration Time: {expiration_time_str}"""
             logger.info(f"result = {result}")
             gRecaptchaResponse = result['gRecaptchaResponse']
             # ua = result['userAgent']
+            # secChUa = result['secChUa']
             return gRecaptchaResponse
         except Exception as e:
             logger.error(e)
             pass
 
-        return None
-    async def get_captcha_yescaptcha(self):
-        # site_key = '0x4AAAAAABpfyUqunlqwRBYN'
-        re_captcha_key = '6Ld-0_ErAAAAACHvVQQLpjeEeXEKiIKvTCk-5emf'
-        json_data = {
-            "task":
-                {
-                    "type": "RecaptchaV2TaskProxyless",
-                    "websiteURL": "https://blockstreet.money",
-                    "websiteKey": re_captcha_key,
-                    "isInvisible": True,
-                }
-        }
-        try:
-            result = await captcha_cloudflare_turnstile(json_data)
-            logger.debug(f"result = {result}")
-            gRecaptchaResponse = result['gRecaptchaResponse']
-            # ua = result['userAgent']
-            return gRecaptchaResponse
-        except Exception as e:
-            logger.error(e)
-            pass
-
-        return None
-    async def get_captcha(self):
-        if self.yescaptcha_type:
-            return await self.get_captcha_yescaptcha()
-        else:
-            return await self.get_captcha_cf_api()
-
+        return None,None,None
 
     async def get_captcha_cf_api(self):
         site_key = '0x4AAAAAABpfyUqunlqwRBYN'
@@ -560,14 +485,15 @@ Expiration Time: {expiration_time_str}"""
             logger.error(f"nonce is None Stop")
             return False
         json_data = self.get_sigin_params(signnonce)
-        if invite_code is None:
-            logger.info(f"没有可用的邀请码，不填")
-        else:
-            # 设置获取到的邀请码
-            json_data['invite_code'] = invite_code
-
+        if self.is_registered:
+            if invite_code is None:
+                logger.info(f"没有可用的邀请码，不填")
+            else:
+                # 设置获取到的邀请码
+                json_data['invite_code'] = invite_code
         #加密
-        result = encrypt_sign_verify_payload(json_data)
+        result = await new_encrypt_sign_verify_payload(json_data,self.public_keys)
+
         headers = {
             'host': 'api.blockstreet.money',
             'sec-ch-ua-platform': '"Windows"',
@@ -579,14 +505,13 @@ Expiration Time: {expiration_time_str}"""
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
             'accept': 'application/json, text/plain, */*',
             'content-type': 'application/x-www-form-urlencoded',
-            'abs': 'a8790953a40f4d7eba761c79cfddf918',
+            'abs': 'e792e8ce66e3473092f0dff0d9994c12',
             'token': result.iv,
             'origin': 'https://blockstreet.money',
             'sec-fetch-site': 'same-site',
             'sec-fetch-mode': 'cors',
             'sec-fetch-dest': 'empty',
             'referer': 'https://blockstreet.money/',
-            # 'accept-encoding': 'gzip, deflate, br, zstd',
             'accept-language': 'zh-CN,zh;q=0.9',
             'priority': 'u=1, i',
         }
@@ -596,9 +521,10 @@ Expiration Time: {expiration_time_str}"""
                 logger.error(f"recaptcha response is None")
                 return False
             headers.update({'recapcha-response': recapcha_response})
-
-        data = result.cipher_text
-        logger.debug(f"加密结果= {data}")
+        print(headers)
+        # cf_token = await self.get_captcha_cf_api()
+        # if cf_token is not None
+        #     headers.update({'cf-token': cf_token})
         try:
             response = await self.http.post('https://api.blockstreet.money/api/account/signverify',
                                             headers=headers,
@@ -627,12 +553,17 @@ def get_one_invite_code():
 async def wait_a_bit():
     await asyncio.sleep(random.randint(1,3))
 async def run_task(idx,pk):
-    # try:
+    try:
+        #先获取公钥
+
         logger.info(f"idx = {idx}, Starting task...")
         proxy = await get_dynamic_ip_time()
         if proxy is None:
             logger.warning(f"proxy is None Continue")
-        block_street = BlockStreet(idx, pk,proxy)
+
+        public_keys =await get_block_street_public_keys_from_website(proxy)
+        await wait_a_bit()
+        block_street = BlockStreet(idx, pk,proxy,public_keys)
         invite_code = get_one_invite_code()
         #login
         if await block_street.login(invite_code):
@@ -648,56 +579,34 @@ async def run_task(idx,pk):
             await wait_a_bit()
         await block_street.close()
         logger.success(f"idx = {idx}, Finish task")
-    # except Exception as e:
-    #     logger.error(e)
-    #     pass
+        sleep_time = random.randint(20,30)
+        logger.info(f"idx = {idx}, 休眠{sleep_time}s")
+        await asyncio.sleep(sleep_time)
+    except Exception as e:
+        logger.error(e)
+        pass
 async def limit_semaphore(idx,pk,semaphore):
     async with semaphore:
         await run_task(idx,pk)
 
-async def main(concurrency):
+async def main_work(concurrency):
+    logger.info(f"开始任务")
+
     load_customer_cf_urls()
     wallets = load_wallets()
-    # while True:
-    print(f"启动时间：{time.time()}")
-    semaphore = asyncio.Semaphore(concurrency)
-    tasks = [limit_semaphore(idx, pk, semaphore) for idx, pk in enumerate(wallets)]
-    await asyncio.gather(*tasks)
-    logger.success(f"完成一次循环")
-    print(f"跑一次的时间：{time.time()}")
+
+    if len(wallets) == 0:
+        logger.error("no wallets found")
+        return
+    while True:
+        semaphore = asyncio.Semaphore(concurrency)
+        tasks = [limit_semaphore(idx, pk, semaphore) for idx, pk in enumerate(wallets)]
+        await asyncio.gather(*tasks)
+        logger.success(f"完成一次循环")
 
 
-async def test_captcha():
-    re_captcha_key = '6Ld-0_ErAAAAACHvVQQLpjeEeXEKiIKvTCk-5emf'
-    json_data = {
-        "task":
-            {
-                "type": "ReCaptchaV2TaskProxyLess",
-                "websiteURL": "https://blockstreet.money/dashboard",
-                "websiteKey": re_captcha_key,
-                # "proxy": self.proxy
-            }
-    }
-    result = await solve_recaptcha(json_data)
-    logger.info(f"result = {result}")
 
-if __name__ == '__main__':
-    # concurrency = 1
-    # str_input = input("请输入并发数量不输入回车默认为1:")
-    # try:
-    #     concurrency = int(str_input)
-    # except ValueError:
-    #     logger.error("输入错误 默认启动1个线程")
-    #     concurrency = 1
-    #     time.sleep(0.5)
-
-        # 捕获 SIGINT 信号
-    asyncio.run(main(10))
-    # 等待用户输入
-    # time.sleep(0.2)
-    # try:
-    #     input("按 Enter 键退出程序...")
-    # except ValueError:
-    #     logger.error("输出错误")
-
+if __name__ == "__main__":
+    # 运行主程序
+    asyncio.run(main_work(concurrency=1))
 
