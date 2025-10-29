@@ -20,3 +20,4 @@
 git clone https://github.com/YueCobra/block-street.git
 cd block-street
 pip install -r requirements.txt
+python main.py
