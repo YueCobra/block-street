@@ -2,7 +2,8 @@
 
 - 🚀 登录
 - 🔧 日常签到、分享
-
+## 📸 截图
+<img width="1599" height="965" alt="827e7881-0c31-449e-8c26-bd8ecd2c6df1" src="https://github.com/user-attachments/assets/67d0f21e-c74e-491d-99fa-858d13a05268" />
 
 ## 🛠️ 安装
 
