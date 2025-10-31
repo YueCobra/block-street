@@ -30,8 +30,10 @@ python -m venv venv
 venv\Scripts\activate
 # Ubuntu:
 source venv/bin/activate
+# 4.安装依赖
+pip install -r requirements.txt
 
-# 4.普通运行
+# 5.普通运行
 python main.py
 # 配置具体邀请码 具体次数
 python block_street_test.py
