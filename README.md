@@ -2,6 +2,7 @@
 
 - 🚀 登录
 - 🔧 日常签到、分享
+- 绑定邮箱（目前已解决）
 ## 📸 截图
 <img width="1551" height="753" alt="image" src="https://github.com/user-attachments/assets/be1301a9-d1c0-493c-8f24-eadda8c40650" />
 
@@ -43,3 +44,4 @@ python block_street_test.py
 
 如果你遇到问题：
 创建新 Issue
+tg:https://t.me/cobra_001
