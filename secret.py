@@ -33,7 +33,7 @@ def block_street_get_visitor_id():
 
 def generate_visitor_id():
     """
-    完全复现 Go 版本的 generateVisitorID
+    generateVisitorID
     """
     while True:
         # 生成 16 字节随机数，相当于 Go 的 crand.Read(buf)
@@ -57,14 +57,15 @@ def generate_visitor_id():
 
 
 class BlockStreetEncryptedPayload:
-    def __init__(self, cipher_text, iv, encrypted_key, timestamp):
+    def __init__(self, cipher_text, iv, encrypted_key, timestamp,aes_key):
         self.cipher_text = cipher_text
         self.iv = iv
         self.encrypted_key = encrypted_key
         self.timestamp = timestamp
+        self.aes_key = aes_key
 
 
-# RSA公钥列表（与Go代码中的相同）
+# RSA公钥列表
 BLOCK_STREET_RSA_PUBLIC_KEYS = [
     """-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnzpG+3W5mvFXBmJSDiDc
@@ -204,6 +205,50 @@ def index_for_timestamp(timestamp, modulus):
     index = id_value % modulus
     return index
 
+def pkcs7_unpad(data):
+    """
+    PKCS7解填充
+    """
+    padding_length = data[-1]
+    # 验证填充是否有效
+    if padding_length < 1 or padding_length > len(data):
+        raise ValueError("Invalid padding")
+    if not all(byte == padding_length for byte in data[-padding_length:]):
+        raise ValueError("Invalid padding")
+    return data[:-padding_length]
+def aes_cbc_decrypt(ciphertext, aes_key, iv_string):
+    """
+    AES-CBC解密
+
+    Args:
+        ciphertext: 加密的数据
+        aes_key: AES密钥 (32 bytes for AES-256)
+        iv: 初始化向量 (16 bytes)
+
+    Returns:
+        bytes: 解密后的原始数据
+    """
+    try:
+        iv_bytes = base64.b64decode(iv_string)
+        # 验证iv长度
+        if len(iv_bytes) != 16:
+            raise ValueError(f"IV must be 16 bytes after decoding, got {len(iv_bytes)} bytes")
+
+        # 创建解密器
+        cipher = Cipher(algorithms.AES(aes_key), modes.CBC(iv_bytes), backend=default_backend())
+        decryptor = cipher.decryptor()
+
+        # 解密数据
+        decrypted_data = decryptor.update(base64.b64decode(ciphertext)) + decryptor.finalize()
+
+        # 去除PKCS7填充
+        unpadded_data = pkcs7_unpad(decrypted_data)
+
+        return unpadded_data
+
+    except Exception as e:
+        raise ValueError(f"Failed to decrypt with AES: {e}")
+
 
 def encrypt_sign_verify_payload(payload):
     """
@@ -334,12 +379,11 @@ async def new_encrypt_sign_verify_payload(payload,public_keys):
         cipher_text=base64.b64encode(ciphertext).decode('ascii'),
         iv=base64.b64encode(iv).decode('ascii'),
         encrypted_key=base64.b64encode(encrypted_key).decode('ascii'),
-        timestamp=timestamp
+        timestamp=timestamp,
+        aes_key=aes_key
     )
 
-# 使用示例
-if __name__ == "__main__":
-    # 示例payload
+def test_entryp():
     params = {
         'address': '0xDE75246436987d0cdaD15af7b573D91b6e66CA9a',
         'nonce': 'Ns6c9YX0jdwf1KaP',
@@ -361,3 +405,8 @@ if __name__ == "__main__":
 
     except Exception as e:
         print(f"加密失败: {e}")
+# 使用示例
+if __name__ == "__main__":
+    # 示例payload
+    iv = "TcWQx5jkyv3qR7kbtEYiVg=="
+    print()

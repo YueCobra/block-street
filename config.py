@@ -12,4 +12,6 @@ class Config:
 
     YESCAPTCHA_KEY= os.getenv('YESCAPTCHA_KEY')
 
+    TEMP_EMAIL_API_URL=os.getenv('TEMP_EMAIL_API_URL')
+
     # 非敏感配置可以直接写在这里

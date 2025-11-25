@@ -21,14 +21,14 @@ async def get_dynamic_ip_time(t=5,country=None):
         logger.error(f"proxy not configured")
         return None
     """异步获取代理 可指定国家"""
-    logger.debug(f"开始获取ip...")
+    logger.info(f"开始获取ip...")
     for i in range(3):
         rand_session = generate_random_string(16)
         if country is None:
             country = random.choice(countries)
         # proxy = f"http://{Config.PROXY_ACCOUNT}-region-{country}-session-{rand_session}-sessTime-{t}:{Config.PROXY_PASSWORD}@{Config.PROXY_HOST}"
         proxy = f"http://{Config.PROXY_ACCOUNT}-sessid-{rand_session}-sessTime-{t}:{Config.PROXY_PASSWORD}@{Config.PROXY_HOST}"
-        logger.info(f"{proxy}")
+        logger.debug(f"{proxy}")
 
         # 检查IP
         try:

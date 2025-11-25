@@ -50,7 +50,7 @@ def extract_rsa_public_keys_advanced(js_content):
 
     if match:
         keys_section = match.group(1)
-        logger.info("找到密钥数组区域")
+        logger.debug("找到密钥数组区域")
 
         # 提取单个公钥（避免重复匹配）
         key_pattern = r'`-----BEGIN PUBLIC KEY-----[\s\S]*?-----END PUBLIC KEY-----`'
@@ -202,10 +202,28 @@ async def get_block_street_public_keys_from_website(proxy=None):
             # 提取公钥
             public_keys = extract_rsa_public_keys_advanced(js_content)
 
+            # recaptcha_site_key = extract_recaptcha_site_key(js_content)
+            logger.debug(f"public_keys: {public_keys}")
+
+
             return public_keys
 
     except Exception as e:
         logger.info(f"获取公钥失败: {e}")
+        return None,None
+
+
+def extract_recaptcha_site_key(js_content):
+    """
+    从JavaScript内容中提取RECAPTCHA_SITE_KEY
+    """
+    # 匹配 RECAPTCHA_SITE_KEY 的模式
+    pattern = r'RECAPTCHA_SITE_KEY\s*=\s*["\']([^"\']+)["\']'
+
+    match = re.search(pattern, js_content)
+    if match:
+        return match.group(1)
+    else:
         return None
 
 def get_public_keys_from_website(url):
