@@ -36,7 +36,7 @@ pip install -r requirements.txt
 
 #5.配置
 .env_example 重命名为 .env
-绑定邮箱必须配置 NOCAPTCHA_API_KEY、代理、first_mail.txt邮箱
+绑定邮箱必须配置 NOCAPTCHA_API_KEY、代理、firtmail_account.txt邮箱
 
 # 6.普通运行
 python main.py
