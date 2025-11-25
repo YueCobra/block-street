@@ -2,7 +2,7 @@
 
 - 🚀 登录
 - 🔧 日常签到、分享
-- 绑定邮箱（目前已解决）
+- 绑定邮箱（目前已解决）需要配置代理+邮箱+nocaptcha
 ## 📸 截图
 <img width="1551" height="753" alt="image" src="https://github.com/user-attachments/assets/be1301a9-d1c0-493c-8f24-eadda8c40650" />
 
@@ -34,7 +34,11 @@ source venv/bin/activate
 # 4.安装依赖
 pip install -r requirements.txt
 
-# 5.普通运行
+#5.配置
+.env_example 重命名为 .env
+绑定邮箱必须配置 NOCAPTCHA_API_KEY、代理、first_mail.txt邮箱
+
+# 6.普通运行
 python main.py
 # 配置具体邀请码 具体次数
 python block_street_test.py
