@@ -17,8 +17,8 @@ from web3 import AsyncHTTPProvider, AsyncWeb3
 from loguru import logger
 # 或者更简单的配置方式
 # 移除默认的处理器
-logger.remove()
-logger.add(sys.stderr, level="INFO")
+# logger.remove()
+# logger.add(sys.stderr, level="INFO")
 from block_street_rsa_config import get_block_street_public_keys_from_website
 from captcha import solve_recaptcha, nocattcha_solve_recaptcha
 from fake_useragent import UserAgent
@@ -34,7 +34,8 @@ from datetime import datetime, timezone, timedelta
 import aiofiles
 customer_cf_url_file = 'customer_cf_url.txt'
 customer_cf_urls = [] #可用打码地址
-
+logger.remove()
+logger.add(sys.stderr, level="INFO")
 def load_customer_cf_urls():
     try:
         global customer_cf_urls
@@ -270,7 +271,7 @@ class BlockStreet:
         self.web3 = AsyncWeb3(AsyncHTTPProvider())
         self.http = httpx.AsyncClient(timeout=25,proxy=proxy,verify=False,http2=True)
         self.address = self.web3.eth.account.from_key(self.pk).address
-        self.chain_id = 10143
+        self.chain_id = 1
         self.public_keys = public_keys
         self.abs = "166cdba1e92744e9b8869563b6ab6215"
         self.fingerprint = '499cf510f0e1f45295b32dd9cb229abc'
