@@ -170,11 +170,13 @@ async def get_block_street_public_keys_from_website(proxy=None):
         # 获取网页内容
         async with httpx.AsyncClient(timeout=30,proxy=proxy) as client:
             response =await client.get(url)
+            # print(response.text)
             # 解析HTML
             soup = BeautifulSoup(response.text, 'html.parser')
 
             # 查找包含hash的JS文件
-            script_tags = soup.find_all('script', src=re.compile(r'/js/index-\w+\.js'))
+            # script_tags = soup.find_all('script', src=re.compile(r'/js/index-\w+\.js'))
+            script_tags = soup.find_all('script', src=re.compile(r'/js/index-[^/]+\.js'))
 
             if not script_tags:
                 logger.info("未找到目标JS文件")
